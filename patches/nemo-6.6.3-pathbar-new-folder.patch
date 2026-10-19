@@ -1,0 +1,115 @@
+diff --git a/gresources/nemo-directory-view-ui.xml b/gresources/nemo-directory-view-ui.xml
+index d4d542b..b3a5973 100644
+--- a/gresources/nemo-directory-view-ui.xml
++++ b/gresources/nemo-directory-view-ui.xml
+@@ -241,6 +241,8 @@
+ 		<menuitem name="LocationOpenAlternate" action="LocationOpenAlternate"/>
+ 	</placeholder>
+ 	<separator name="Location After Open Separator"/>
++	<menuitem name="LocationNewFolder" action="LocationNewFolder"/>
++	<separator name="Location After New Folder Separator"/>
+ 	<placeholder name="Clipboard Actions">
+ 		<menuitem name="Cut" action="LocationCut"/>
+ 		<menuitem name="Copy" action="LocationCopy"/>
+diff --git a/src/nemo-actions.h b/src/nemo-actions.h
+index 0ec1c07..bd04217 100644
+--- a/src/nemo-actions.h
++++ b/src/nemo-actions.h
+@@ -94,6 +94,7 @@
+ #define NEMO_ACTION_COPY_TO_MENU "CopyToMenu"
+ #define NEMO_ACTION_MOVE_TO_MENU "MoveToMenu"
+ #define NEMO_ACTION_LOCATION_PASTE_FILES_INTO "LocationPasteFilesInto"
++#define NEMO_ACTION_LOCATION_NEW_FOLDER "LocationNewFolder"
+ #define NEMO_ACTION_RENAME "Rename"
+ #define NEMO_ACTION_DUPLICATE "Duplicate"
+ #define NEMO_ACTION_CREATE_LINK "Create Link"
+diff --git a/src/nemo-view.c b/src/nemo-view.c
+index e0170fc..cad8299 100644
+--- a/src/nemo-view.c
++++ b/src/nemo-view.c
+@@ -8121,6 +8121,61 @@ action_location_paste_files_into_callback (GtkAction *action,
+ 	paste_into (view, file);
+ }
+ 
++static void
++action_location_new_folder_callback (GtkAction *action,
++				     gpointer   callback_data)
++{
++	NemoView *view;
++	NemoFile *file;
++	GtkWidget *dialog, *entry, *content;
++	GFile *parent, *child;
++	GError *error;
++	const char *name;
++
++	view = NEMO_VIEW (callback_data);
++
++	file = view->details->location_popup_directory_as_file;
++	g_return_if_fail (file != NULL);
++
++	dialog = gtk_dialog_new_with_buttons (_("New folder"),
++					      nemo_view_get_containing_window (view),
++					      GTK_DIALOG_MODAL | GTK_DIALOG_DESTROY_WITH_PARENT,
++					      _("_Cancel"), GTK_RESPONSE_CANCEL,
++					      _("Create New _Folder"), GTK_RESPONSE_OK,
++					      NULL);
++	gtk_dialog_set_default_response (GTK_DIALOG (dialog), GTK_RESPONSE_OK);
++
++	entry = gtk_entry_new ();
++	gtk_entry_set_text (GTK_ENTRY (entry), _("Untitled Folder"));
++	gtk_entry_set_activates_default (GTK_ENTRY (entry), TRUE);
++	gtk_entry_set_width_chars (GTK_ENTRY (entry), 40);
++
++	content = gtk_dialog_get_content_area (GTK_DIALOG (dialog));
++	gtk_container_set_border_width (GTK_CONTAINER (content), 12);
++	gtk_box_pack_start (GTK_BOX (content), entry, TRUE, TRUE, 0);
++	gtk_widget_show_all (dialog);
++
++	if (gtk_dialog_run (GTK_DIALOG (dialog)) == GTK_RESPONSE_OK) {
++		name = gtk_entry_get_text (GTK_ENTRY (entry));
++		if (name[0] != '\0') {
++			parent = nemo_file_get_location (file);
++			child = g_file_get_child_for_display_name (parent, name, NULL);
++			error = NULL;
++			if (child == NULL ||
++			    !g_file_make_directory (child, NULL, &error)) {
++				eel_show_error_dialog (_("New folder"),
++						       error != NULL ? error->message : name,
++						       nemo_view_get_containing_window (view));
++				g_clear_error (&error);
++			}
++			g_clear_object (&child);
++			g_object_unref (parent);
++		}
++	}
++
++	gtk_widget_destroy (dialog);
++}
++
+ static void
+ action_location_trash_callback (GtkAction *action,
+ 				gpointer   callback_data)
+@@ -8431,6 +8486,11 @@ static const GtkActionEntry directory_view_entries[] = {
+   /* tooltip */                  N_("Move or copy files previously selected by a Cut or Copy command into this folder"),
+ 				 G_CALLBACK (action_location_paste_files_into_callback) },
+ 
++  /* name, stock id */         { NEMO_ACTION_LOCATION_NEW_FOLDER, "xsi-folder-new-symbolic",
++  /* label, accelerator */       N_("Create New _Folder"), "",
++  /* tooltip */                  N_("Create a new empty folder inside this folder"),
++				 G_CALLBACK (action_location_new_folder_callback) },
++
+   /* name, stock id */         { NEMO_ACTION_LOCATION_TRASH, NULL,
+   /* label, accelerator */       N_("Mo_ve to Trash"), "",
+   /* tooltip */                  N_("Move this folder to the Trash"),
+@@ -9463,6 +9523,11 @@ real_update_location_menu (NemoView *view)
+     gtk_action_set_sensitive (action, !is_recent && can_delete_file);
+     gtk_action_set_visible (action, !is_recent);
+ 
++	action = gtk_action_group_get_action (view->details->dir_action_group,
++					      NEMO_ACTION_LOCATION_NEW_FOLDER);
++	gtk_action_set_sensitive (action, !is_recent && nemo_file_can_write (file));
++	gtk_action_set_visible (action, !is_recent);
++
+ 	action = gtk_action_group_get_action (view->details->dir_action_group,
+ 					      NEMO_ACTION_LOCATION_PASTE_FILES_INTO);
+ 	g_object_set_data (G_OBJECT (action),

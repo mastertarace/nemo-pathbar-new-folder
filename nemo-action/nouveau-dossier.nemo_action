@@ -1,0 +1,7 @@
+[Nemo Action]
+Name=Nouveau dossier ici…
+Comment=Créer un sous-dossier dans « %f »
+Exec=<nouveau-dossier.sh> %F
+Icon-Name=folder-new
+Selection=s
+Extensions=dir;
